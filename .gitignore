@@ -1,0 +1,20 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Temporary and runtime generated files
+last_accident.jpg
+scratch_mask2.jpg
+*.tmp
+
+# Gigabyte-scale zip archives and raw image datasets (exceeds GitHub 100MB file limit)
+*.zip
+Traffic Accident Detection.v1i.yolov8/
+fall_dataset/
+runs/
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.swp
