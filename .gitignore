@@ -17,6 +17,7 @@ data/
 runs/
 yolov8s.pt
 prompt10*.txt
+deploy_to_hf.py
 
 # IDE & Editor files
 .vscode/

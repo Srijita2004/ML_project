@@ -1,0 +1,42 @@
+{
+  "phone_pipeline": {
+    "standard": {
+      "accuracy": 100.0,
+      "correct": 11,
+      "total": 11
+    },
+    "portrait": {
+      "accuracy": 90.9090909090909,
+      "correct": 10,
+      "total": 11
+    },
+    "low_light": {
+      "accuracy": 90.9090909090909,
+      "correct": 10,
+      "total": 11
+    },
+    "bright_sunlight": {
+      "accuracy": 100.0,
+      "correct": 11,
+      "total": 11
+    },
+    "motion_blur": {
+      "accuracy": 90.9090909090909,
+      "correct": 10,
+      "total": 11
+    },
+    "high_compression": {
+      "accuracy": 100.0,
+      "correct": 11,
+      "total": 11
+    }
+  },
+  "esp32_pipeline": {
+    "accuracy": 100.0,
+    "hazard_recalls": {
+      "road": 100.0,
+      "fall": 100.0,
+      "fire": 100.0
+    }
+  }
+}

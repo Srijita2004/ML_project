@@ -1,0 +1,48 @@
+{
+  "dataset_summary": {
+    "total_test_samples": 213,
+    "normal_samples": 5,
+    "road_samples": 85,
+    "fall_samples": 61,
+    "fire_samples": 62
+  },
+  "calibration": {
+    "road": {
+      "raw_ece": 0.2671221806605657,
+      "cal_ece": 1.0629564776487577e-05,
+      "brier": 0.0066197855633980665
+    },
+    "fall": {
+      "raw_ece": 0.16583064622154425,
+      "cal_ece": 0.10060995109493989,
+      "brier": 0.12349890135070112
+    }
+  },
+  "frame_metrics": {
+    "TP": 195,
+    "TN": 5,
+    "FP": 0,
+    "FN": 13,
+    "Accuracy": 0.9389671361502347,
+    "Precision": 1.0,
+    "Recall": 0.9375,
+    "Specificity": 1.0,
+    "F1": 0.967741935483871,
+    "FPR": 0.0,
+    "FNR": 0.0625
+  },
+  "event_metrics": {
+    "TP": 195,
+    "TN": 5,
+    "FP": 0,
+    "FN": 13,
+    "Accuracy": 0.9389671361502347,
+    "Precision": 1.0,
+    "Recall": 0.9375,
+    "Specificity": 1.0,
+    "F1": 0.967741935483871,
+    "FPR": 0.0,
+    "FNR": 0.0625
+  },
+  "avg_latency_ms": 42.03796050917934
+}

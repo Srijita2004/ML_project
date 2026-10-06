@@ -27,54 +27,61 @@ last_email_time_pulse  = 0
 EMAIL_COOLDOWN         = 35
 
 # =====================================================
-# MODELS
+# MODELS & PROBABILITY CALIBRATION
 # =====================================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+# 1. Fire Neural Model (YOLO11s trained on Fire & Smoke)
+fire_model_candidates = [
+    os.path.join(BASE_DIR, "models", "production", "fire_v2_yolo11s.pt"),
+    os.path.join(BASE_DIR, "fire_v2_yolo11s.pt"),
+    os.path.join(BASE_DIR, "firedetect-11s.pt"),
+]
+fire_model_path = next((p for p in fire_model_candidates if os.path.exists(p)), None)
+if fire_model_path:
+    print(f"[MODEL] Loading fire model: {fire_model_path}")
+    fire_model = YOLO(fire_model_path)
+else:
+    print("[MODEL] Neural fire model not found, fallback to physics detector")
+    fire_model = None
+
+# 2. Fall Model (YOLOv8n with Hard Negative Rejection)
 fall_model_candidates = [
     os.path.join(BASE_DIR, "models", "production", "fall_v2_hardneg_best.pt"),
+    os.path.join(BASE_DIR, "fall_v2_hardneg_best.pt"),
     os.path.join(BASE_DIR, "fall_expanded_best.pt"),
     os.path.join(BASE_DIR, "fall_accident_model_best.pt"),
     os.path.join(BASE_DIR, "models", "rollback", "fall_expanded_best_v1.pt"),
 ]
-fall_model_path = next((p for p in fall_model_candidates if os.path.exists(p)), os.path.join(BASE_DIR, "fall_expanded_best.pt"))
+fall_model_path = next((p for p in fall_model_candidates if os.path.exists(p)), os.path.join(BASE_DIR, "fall_v2_hardneg_best.pt"))
 print(f"[MODEL] Loading fall model: {fall_model_path}")
 fall_model = YOLO(fall_model_path)
 
+# 3. Road Model (YOLOv8s trained on CCTV collisions & normal traffic)
 road_model_candidates = [
+    os.path.join(BASE_DIR, "models", "production", "road_v3_small_best.pt"),
+    os.path.join(BASE_DIR, "road_v3_small_best.pt"),
     os.path.join(BASE_DIR, "models", "production", "road_v2_cctv_best.pt"),
     os.path.join(BASE_DIR, "road_expanded_best.pt"),
     os.path.join(BASE_DIR, "road_best.pt"),
     os.path.join(BASE_DIR, "models", "rollback", "road_expanded_best_v1.pt"),
 ]
-road_model_path = next((p for p in road_model_candidates if os.path.exists(p)), os.path.join(BASE_DIR, "road_expanded_best.pt"))
+road_model_path = next((p for p in road_model_candidates if os.path.exists(p)), os.path.join(BASE_DIR, "road_v3_small_best.pt"))
 print(f"[MODEL] Loading road model: {road_model_path}")
 road_model = YOLO(road_model_path)
 
 # =====================================================
-# EMAIL CONFIGURATION (Supports ENV overrides)
+# CALIBRATED DETECTION SETTINGS
 # =====================================================
-EMAIL_ADDRESS = os.environ.get("ALERT_EMAIL_ADDRESS", "projectg595@gmail.com")
-APP_PASSWORD  = os.environ.get("ALERT_APP_PASSWORD", "dqnuhcmfhxkeprxz")
-TO_EMAIL      = os.environ.get("ALERT_TO_EMAIL", "projectg595@gmail.com")
-
-# =====================================================
-# FIRE SETTINGS
-# =====================================================
-STRONG_FIRE_RATIO  = 0.040
-MEDIUM_FIRE_RATIO  = 0.026
-
-# =====================================================
-# ROAD SETTINGS (Calibrated on Validation CCTV Set)
-# =====================================================
-ACCIDENT_CLASSES   = ["human_incident", "vehicle_incident"]
-ROAD_CONF_THRES    = 0.35
-
-# =====================================================
-# FALL SETTINGS (Calibrated with Hard Negative Rejection)
-# =====================================================
-FALL_CONF_THRES     = 0.45
+ACCIDENT_CLASSES    = ["human_incident", "vehicle_incident"]
+ROAD_CONF_THRES     = 0.35
+FALL_CONF_THRES     = 0.40
 FALL_MIN_AREA_RATIO = 0.01
+FIRE_CONF_THRES     = 0.40
+
+# Heuristic physics thresholds for flame confirmation
+STRONG_FIRE_RATIO   = 0.040
+MEDIUM_FIRE_RATIO   = 0.026
 
 # =====================================================
 # SEND EMAIL
@@ -337,131 +344,146 @@ def predict():
             except Exception:
                 pass
 
-        # 1. FIRE EVALUATION
-        fire_ratio, strong_hit, medium_hit = is_fire_like(img)
-        if strong_hit:
-            save_snapshot(img)
-            return jsonify({
-                "accident": True,
-                "emergency": True,
-                "type": "fire_smoke_accident",
-                "score": float(fire_ratio),
-                "confidence": float(fire_ratio),
-                "result": "fire detected",
-                "labels": ["fire_combustion"]
-            })
-
-        # 2. RUN ROAD MODEL FIRST
-        road_results = road_model(img, conf=0.30, verbose=False)
-
+        # =====================================================
+        # 1. EVALUATE FIRE HAZARD (NEURAL YOLO11s + OPTIONAL PHYSICS)
+        # =====================================================
         detected_labels = []
+        best_fire_conf = 0.0
+        best_fire_label = "fire"
+        
+        if fire_model is not None:
+            try:
+                fire_res = fire_model(img, conf=0.25, verbose=False)
+                if fire_res[0].boxes and len(fire_res[0].boxes) > 0:
+                    for b_i in range(len(fire_res[0].boxes)):
+                        c_id = int(fire_res[0].boxes.cls[b_i].item())
+                        cf = float(fire_res[0].boxes.conf[b_i].item())
+                        lbl = fire_model.names.get(c_id, "Fire")
+                        detected_labels.append(lbl)
+                        if cf > best_fire_conf:
+                            best_fire_conf = cf
+                            best_fire_label = lbl.lower()
+            except Exception as e:
+                print(f"[FIRE INFERENCE ERROR]: {e}")
+
+        # Secondary physics confirmation & legacy fire ratio tracking
+        fire_ratio, strong_hit, medium_hit = is_fire_like(img)
+        # Only use physics-only fallback if neural fire model is NOT loaded, OR if combustion area is massive (>= 12% frame) with flame core
+        if (fire_model is None or fire_ratio >= 0.12) and strong_hit and best_fire_conf == 0.0:
+            best_fire_conf = min(0.92, max(0.65, 0.65 + 2.0 * fire_ratio))
+            best_fire_label = "fire"
+            detected_labels.append("fire_combustion")
+
+        # =====================================================
+        # 2. EVALUATE ROAD HAZARD (YOLOv8s HIGH-ACCURACY MODEL)
+        # =====================================================
         best_road_conf = 0.0
         best_road_label = None
 
-        for r in road_results:
-            if r.boxes is None or len(r.boxes) == 0:
-                continue
-            for i in range(len(r.boxes)):
-                cls_id = int(r.boxes.cls[i].item()) if r.boxes.cls is not None else -1
-                conf = float(r.boxes.conf[i].item()) if r.boxes.conf is not None else 0.0
-                cname = road_model.names.get(cls_id, str(cls_id))
-                detected_labels.append(cname)
-                if cname in ACCIDENT_CLASSES and conf >= ROAD_CONF_THRES:
-                    if conf > best_road_conf:
-                        best_road_conf = conf
-                        best_road_label = cname
+        try:
+            road_results = road_model(img, conf=0.25, verbose=False)
+            for r in road_results:
+                if r.boxes is None or len(r.boxes) == 0:
+                    continue
+                for i in range(len(r.boxes)):
+                    cls_id = int(r.boxes.cls[i].item()) if r.boxes.cls is not None else -1
+                    conf = float(r.boxes.conf[i].item()) if r.boxes.conf is not None else 0.0
+                    cname = road_model.names.get(cls_id, str(cls_id))
+                    if cname not in detected_labels:
+                        detected_labels.append(cname)
+                    if cname in ACCIDENT_CLASSES:
+                        if conf > best_road_conf:
+                            best_road_conf = conf
+                            best_road_label = cname
+        except Exception as e:
+            print(f"[ROAD INFERENCE ERROR]: {e}")
 
-        # Fast-path: Unequivocal high-confidence road collision or pedestrian incident (>= 0.70)
-        if best_road_conf >= 0.70:
-            save_snapshot(img)
-            return jsonify({
-                "accident": True,
-                "emergency": True,
-                "type": "road_vehicle_accident",
-                "score": float(best_road_conf),
-                "confidence": float(best_road_conf),
-                "result": "road accident detected",
-                "labels": detected_labels
-            })
-
-        # 3. RUN FALL MODEL IF NO HIGH-CONFIDENCE ROAD COLLISION
-        fall_results = fall_model(img, conf=0.30, verbose=False)
+        # =====================================================
+        # 3. EVALUATE FALL HAZARD (YOLOv8n HARD-NEGATIVE MODEL)
+        # =====================================================
         best_fall_conf = 0.0
-        for r in fall_results:
-            if r.boxes is None or len(r.boxes) == 0:
-                continue
-            for i in range(len(r.boxes)):
-                conf = float(r.boxes.conf[i].item()) if r.boxes.conf is not None else 0.0
-                x1, y1, x2, y2 = r.boxes.xyxy[i].cpu().numpy()
-                box_area = max(0, (x2 - x1)) * max(0, (y2 - y1))
-                area_ratio = box_area / frame_area
-                if conf >= FALL_CONF_THRES and area_ratio >= FALL_MIN_AREA_RATIO:
-                    if conf > best_fall_conf:
-                        best_fall_conf = conf
-                        if "Fall-Detected" not in detected_labels:
-                            detected_labels.append("Fall-Detected")
 
-        # 3. SYNTHESIZE MULTI-MODAL ACCIDENT OUTCOME
-        # Case A: Pedestrian road incident detected
-        if best_road_label == "human_incident" and best_road_conf >= ROAD_CONF_THRES:
-            save_snapshot(img)
-            return jsonify({
-                "accident": True,
-                "emergency": True,
-                "type": "road_vehicle_accident",
-                "score": float(best_road_conf),
-                "confidence": float(best_road_conf),
-                "result": "road accident detected",
-                "labels": detected_labels
+        try:
+            fall_results = fall_model(img, conf=0.25, verbose=False)
+            for r in fall_results:
+                if r.boxes is None or len(r.boxes) == 0:
+                    continue
+                for i in range(len(r.boxes)):
+                    conf = float(r.boxes.conf[i].item()) if r.boxes.conf is not None else 0.0
+                    x1, y1, x2, y2 = r.boxes.xyxy[i].cpu().numpy()
+                    box_area = max(0, (x2 - x1)) * max(0, (y2 - y1))
+                    area_ratio = box_area / frame_area
+                    if area_ratio >= FALL_MIN_AREA_RATIO:
+                        if conf > best_fall_conf:
+                            best_fall_conf = conf
+                            if "Fall-Detected" not in detected_labels:
+                                detected_labels.append("Fall-Detected")
+        except Exception as e:
+            print(f"[FALL INFERENCE ERROR]: {e}")
+
+        # =====================================================
+        # 4. STRUCTURED HAZARD SCORES (NO CROSS-HAZARD AVERAGING)
+        # =====================================================
+        hazard_scores = {
+            "fire": round(float(best_fire_conf), 4),
+            "road": round(float(best_road_conf), 4),
+            "fall": round(float(best_fall_conf), 4)
+        }
+
+        # Gather qualifying emergency candidates
+        candidates = []
+        if best_fire_conf >= FIRE_CONF_THRES:
+            candidates.append({
+                "type": "fire_smoke_accident",
+                "score": best_fire_conf,
+                "result": f"{best_fire_label} detected",
+                "hazard": "fire"
             })
-
-        # Case B: Fall is detected with higher confidence than vehicle incident
-        if best_fall_conf >= FALL_CONF_THRES and best_fall_conf >= best_road_conf:
-            save_snapshot(img)
-            return jsonify({
-                "accident": True,
-                "emergency": True,
-                "type": "human_fall_accident",
-                "score": float(best_fall_conf),
-                "confidence": float(best_fall_conf),
-                "result": "fall detected",
-                "labels": detected_labels
-            })
-
-        # Case C: Vehicle crash detected
         if best_road_conf >= ROAD_CONF_THRES:
-            save_snapshot(img)
-            return jsonify({
-                "accident": True,
-                "emergency": True,
+            candidates.append({
                 "type": "road_vehicle_accident",
-                "score": float(best_road_conf),
-                "confidence": float(best_road_conf),
-                "result": "road accident detected",
-                "labels": detected_labels
+                "score": best_road_conf,
+                "result": "road accident detected" if best_road_label != "human_incident" else "pedestrian accident detected",
+                "hazard": "road"
             })
-
-        # Case D: Fall detected without road incident
         if best_fall_conf >= FALL_CONF_THRES:
-            save_snapshot(img)
-            return jsonify({
-                "accident": True,
-                "emergency": True,
+            candidates.append({
                 "type": "human_fall_accident",
-                "score": float(best_fall_conf),
-                "confidence": float(best_fall_conf),
+                "score": best_fall_conf,
                 "result": "fall detected",
+                "hazard": "fall"
+            })
+
+        # =====================================================
+        # 5. ARBITRATION & DISPATCH
+        # =====================================================
+        if not candidates:
+            # Clean Normal Scene
+            return jsonify({
+                "accident": False,
+                "emergency": False,
+                "type": "non_accident",
+                "score": 0.0,
+                "confidence": 0.0,
+                "scores": hazard_scores,
+                "result": "normal",
                 "labels": detected_labels
             })
 
-        # Case E: Normal Scene (Non-Accident)
+        # Select the winning hazard with highest calibrated evidence
+        candidates.sort(key=lambda c: c["score"], reverse=True)
+        winner = candidates[0]
+        winning_score = round(float(winner["score"]), 4)
+
+        save_snapshot(img)
         return jsonify({
-            "accident": False,
-            "emergency": False,
-            "type": "non_accident",
-            "score": 0.0,
-            "confidence": 0.0,
-            "result": "normal",
+            "accident": True,
+            "emergency": True,
+            "type": winner["type"],
+            "score": winning_score,
+            "confidence": winning_score,
+            "scores": hazard_scores,
+            "result": winner["result"],
             "labels": detected_labels
         })
 

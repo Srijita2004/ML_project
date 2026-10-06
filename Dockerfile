@@ -19,10 +19,12 @@ RUN pip install --no-cache-dir -r requirements-deploy.txt
 
 # Copy application files and model checkpoints
 COPY app_final.py .
+COPY calibration_params.json .
+COPY fire_v2_yolo11s.pt .
+COPY road_v3_small_best.pt .
 COPY road_expanded_best.pt .
-COPY road_best.pt .
+COPY fall_v2_hardneg_best.pt .
 COPY fall_expanded_best.pt .
-COPY fall_accident_model_best.pt .
 
 # Set default port to 7860 (works for Hugging Face Spaces; Render/Railway pass their own PORT env)
 ENV PORT=7860 \
