@@ -13,7 +13,10 @@ scratch_mask2.jpg
 *.zip
 Traffic Accident Detection.v1i.yolov8/
 fall_dataset/
+data/
 runs/
+yolov8s.pt
+prompt10*.txt
 
 # IDE & Editor files
 .vscode/

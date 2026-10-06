@@ -14,6 +14,7 @@ app = Flask(__name__)
 
 # Load trained fall detection model (prefer new improved model)
 MODEL_CANDIDATES = [
+    os.path.join(os.path.dirname(__file__), "models", "production", "fall_v2_hardneg_best.pt"),
     os.path.join(os.path.dirname(__file__), "fall_expanded_best.pt"),
     os.path.join(os.path.dirname(__file__), "runs", "fall_subset5k_v1", "weights", "best.pt"),
     os.path.join(os.path.dirname(__file__), "best.pt"),

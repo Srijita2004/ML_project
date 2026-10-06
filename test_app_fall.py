@@ -35,7 +35,9 @@ def run_tests():
     # ----------------------------------------------------
     # TEST 3: Positive Fall Emergency Detection
     # ----------------------------------------------------
-    fall_sample = Path(__file__).resolve().parent / "test_images" / "images (1).jpg"
+    # Positive Fall Sample
+    fall_sample_cand = Path(__file__).resolve().parent / "test_images" / "fall_sample.jpg"
+    fall_sample = fall_sample_cand if fall_sample_cand.exists() else Path(__file__).resolve().parent / "test_images" / "images (1).jpg"
     print(f"\n[TEST 3] POST /predict with FALL image: {fall_sample.name}")
     assert fall_sample.exists(), f"Sample image not found: {fall_sample}"
 

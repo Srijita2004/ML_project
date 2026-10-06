@@ -31,11 +31,23 @@ EMAIL_COOLDOWN         = 35
 # =====================================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-fall_model_path = os.path.join(BASE_DIR, "fall_expanded_best.pt") if os.path.exists(os.path.join(BASE_DIR, "fall_expanded_best.pt")) else os.path.join(BASE_DIR, "fall_accident_model_best.pt")
+fall_model_candidates = [
+    os.path.join(BASE_DIR, "models", "production", "fall_v2_hardneg_best.pt"),
+    os.path.join(BASE_DIR, "fall_expanded_best.pt"),
+    os.path.join(BASE_DIR, "fall_accident_model_best.pt"),
+    os.path.join(BASE_DIR, "models", "rollback", "fall_expanded_best_v1.pt"),
+]
+fall_model_path = next((p for p in fall_model_candidates if os.path.exists(p)), os.path.join(BASE_DIR, "fall_expanded_best.pt"))
 print(f"[MODEL] Loading fall model: {fall_model_path}")
 fall_model = YOLO(fall_model_path)
 
-road_model_path = os.path.join(BASE_DIR, "road_expanded_best.pt") if os.path.exists(os.path.join(BASE_DIR, "road_expanded_best.pt")) else os.path.join(BASE_DIR, "road_best.pt")
+road_model_candidates = [
+    os.path.join(BASE_DIR, "models", "production", "road_v2_cctv_best.pt"),
+    os.path.join(BASE_DIR, "road_expanded_best.pt"),
+    os.path.join(BASE_DIR, "road_best.pt"),
+    os.path.join(BASE_DIR, "models", "rollback", "road_expanded_best_v1.pt"),
+]
+road_model_path = next((p for p in road_model_candidates if os.path.exists(p)), os.path.join(BASE_DIR, "road_expanded_best.pt"))
 print(f"[MODEL] Loading road model: {road_model_path}")
 road_model = YOLO(road_model_path)
 
@@ -53,15 +65,15 @@ STRONG_FIRE_RATIO  = 0.040
 MEDIUM_FIRE_RATIO  = 0.026
 
 # =====================================================
-# ROAD SETTINGS
+# ROAD SETTINGS (Calibrated on Validation CCTV Set)
 # =====================================================
 ACCIDENT_CLASSES   = ["human_incident", "vehicle_incident"]
-ROAD_CONF_THRES    = 0.45
+ROAD_CONF_THRES    = 0.35
 
 # =====================================================
-# FALL SETTINGS
+# FALL SETTINGS (Calibrated with Hard Negative Rejection)
 # =====================================================
-FALL_CONF_THRES     = 0.50
+FALL_CONF_THRES     = 0.45
 FALL_MIN_AREA_RATIO = 0.01
 
 # =====================================================
@@ -359,8 +371,8 @@ def predict():
                         best_road_conf = conf
                         best_road_label = cname
 
-        # Fast-path: Unequivocal high-confidence road collision or pedestrian incident (>= 0.75)
-        if best_road_conf >= 0.75:
+        # Fast-path: Unequivocal high-confidence road collision or pedestrian incident (>= 0.70)
+        if best_road_conf >= 0.70:
             save_snapshot(img)
             return jsonify({
                 "accident": True,

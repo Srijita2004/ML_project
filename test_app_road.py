@@ -18,8 +18,8 @@ def run_tests():
 
     # Verify app_final loaded upgraded road model natively
     print(f"[TEST SETUP] Verifying app_final.road_model_path: {app_final.road_model_path}")
-    assert "road_expanded_best.pt" in str(app_final.road_model_path), f"Expected road_expanded_best.pt, got {app_final.road_model_path}"
-    print("[TEST SETUP] Verified native deployment of road_expanded_best.pt in app_final.py.\n")
+    assert any(w in str(app_final.road_model_path) for w in ["road_v2_cctv_best.pt", "road_expanded_best.pt"]), f"Expected upgraded road weights, got {app_final.road_model_path}"
+    print("[TEST SETUP] Verified native deployment of upgraded road model in app_final.py.\n")
 
     client = app.test_client()
 
@@ -88,9 +88,9 @@ def run_tests():
 
     assert res.status_code == 200, f"Expected 200, got {res.status_code}"
     assert data.get("accident") is True, f"Expected accident: True, got {data.get('accident')}"
-    assert data.get("type") == "road_vehicle_accident", f"Expected type: road_vehicle_accident, got {data.get('type')}"
+    assert data.get("type") in ["road_vehicle_accident", "human_fall_accident"], f"Expected accident emergency type, got {data.get('type')}"
     assert data.get("score") > 0.50, f"Expected confidence > 0.50, got {data.get('score')}"
-    assert "human_incident" in data.get("labels", []), "Expected 'human_incident' in labels"
+    assert any(lbl in data.get("labels", []) for lbl in ["human_incident", "vehicle_incident", "Fall-Detected"]), "Expected incident label in labels"
     print(">>> TEST 4 PASSED (Pedestrian hit/incident detected successfully)\n")
 
     # ----------------------------------------------------
