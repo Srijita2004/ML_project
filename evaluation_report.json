@@ -1,0 +1,31 @@
+{
+  "baseline": {
+    "TP": 7,
+    "FP": 0,
+    "TN": 5,
+    "FN": 0,
+    "Precision": 1.0,
+    "Recall": 1.0,
+    "F1": 1.0,
+    "Accuracy": 1.0,
+    "TypeClassificationAccuracy": 0.7143
+  },
+  "refined": {
+    "TP": 7,
+    "FP": 0,
+    "TN": 5,
+    "FN": 0,
+    "Precision": 1.0,
+    "Recall": 1.0,
+    "F1": 1.0,
+    "Accuracy": 1.0,
+    "TypeClassificationAccuracy": 1.0
+  },
+  "benchmark_samples_count": 12,
+  "latency_benchmark": {
+    "min_latency_ms": 20.84,
+    "avg_latency_ms": 58.93,
+    "max_latency_ms": 109.37,
+    "throughput_fps": 17.0
+  }
+}

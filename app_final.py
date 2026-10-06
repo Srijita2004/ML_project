@@ -51,24 +51,18 @@ TO_EMAIL      = os.environ.get("ALERT_TO_EMAIL", "projectg595@gmail.com")
 # =====================================================
 STRONG_FIRE_RATIO  = 0.040
 MEDIUM_FIRE_RATIO  = 0.026
-MEDIUM_HITS_NEEDED = 2
-medium_hits = 0
 
 # =====================================================
 # ROAD SETTINGS
 # =====================================================
 ACCIDENT_CLASSES   = ["human_incident", "vehicle_incident"]
-ROAD_CONF_THRES    = 0.35
-ROAD_CONFIRM_HITS  = 1
-road_hits = 0
+ROAD_CONF_THRES    = 0.45
 
 # =====================================================
 # FALL SETTINGS
 # =====================================================
-FALL_CONF_THRES     = 0.80
-FALL_CONFIRM_HITS   = 2
-FALL_MIN_AREA_RATIO = 0.08
-fall_hits = 0
+FALL_CONF_THRES     = 0.50
+FALL_MIN_AREA_RATIO = 0.01
 
 # =====================================================
 # SEND EMAIL
@@ -288,8 +282,6 @@ def gps_status():
 # =====================================================
 @app.route("/predict", methods=["POST", "OPTIONS"])
 def predict():
-    global medium_hits, road_hits, fall_hits
-
     if request.method == "OPTIONS":
         return jsonify({"status": "ok"}), 200
 
@@ -301,91 +293,176 @@ def predict():
                 file = file_obj.read()
 
         if not file:
-            return jsonify({"accident": False, "type": "non_accident", "score": 0.0, "result": "normal", "error": "empty_body"}), 400
+            return jsonify({
+                "accident": False,
+                "emergency": False,
+                "type": "non_accident",
+                "score": 0.0,
+                "confidence": 0.0,
+                "result": "normal",
+                "error": "empty_body"
+            }), 400
 
         npimg = np.frombuffer(file, np.uint8)
         img   = cv2.imdecode(npimg, cv2.IMREAD_COLOR)
         if img is None:
-            return jsonify({"accident": False, "type": "non_accident", "score": 0.0, "result": "normal", "error": "bad_image"}), 400
+            return jsonify({
+                "accident": False,
+                "emergency": False,
+                "type": "non_accident",
+                "score": 0.0,
+                "confidence": 0.0,
+                "result": "normal",
+                "error": "bad_image"
+            }), 400
 
-
-        cv2.imwrite("last_accident.jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 40])
-
-        h, w       = img.shape[:2]
+        h, w = img.shape[:2]
         frame_area = h * w if h > 0 and w > 0 else 1
 
-        # FIRE
+        def save_snapshot(frame):
+            try:
+                cv2.imwrite("last_accident.jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 50])
+            except Exception:
+                pass
+
+        # 1. FIRE EVALUATION
         fire_ratio, strong_hit, medium_hit = is_fire_like(img)
         if strong_hit:
-            medium_hits = road_hits = fall_hits = 0
-            return jsonify({"accident": True, "type": "fire_smoke_accident", "score": float(fire_ratio), "result": "fire detected"})
+            save_snapshot(img)
+            return jsonify({
+                "accident": True,
+                "emergency": True,
+                "type": "fire_smoke_accident",
+                "score": float(fire_ratio),
+                "confidence": float(fire_ratio),
+                "result": "fire detected",
+                "labels": ["fire_combustion"]
+            })
 
-        if medium_hit:
-            medium_hits += 1
-        else:
-            medium_hits = 0
+        # 2. RUN ROAD MODEL FIRST
+        road_results = road_model(img, conf=0.30, verbose=False)
 
-        if medium_hits >= MEDIUM_HITS_NEEDED:
-            medium_hits = road_hits = fall_hits = 0
-            return jsonify({"accident": True, "type": "fire_smoke_accident", "score": float(fire_ratio), "result": "fire detected"})
-
-        # ROAD
-        road_results      = road_model(img, conf=ROAD_CONF_THRES, verbose=False)
-        detected_labels   = []
-        accident_detected = False
-        best_conf         = 0.0
+        detected_labels = []
+        best_road_conf = 0.0
+        best_road_label = None
 
         for r in road_results:
-            if r.boxes is None or len(r.boxes) == 0: continue
+            if r.boxes is None or len(r.boxes) == 0:
+                continue
             for i in range(len(r.boxes)):
-                cls_id     = int(r.boxes.cls[i].item()) if r.boxes.cls is not None else -1
-                conf       = float(r.boxes.conf[i].item()) if r.boxes.conf is not None else 0.0
-                class_name = road_model.names[cls_id] if cls_id in road_model.names else str(cls_id)
-                detected_labels.append(class_name)
-                if class_name in ACCIDENT_CLASSES and conf >= ROAD_CONF_THRES:
-                    accident_detected = True
-                    if conf > best_conf:
-                        best_conf = conf
+                cls_id = int(r.boxes.cls[i].item()) if r.boxes.cls is not None else -1
+                conf = float(r.boxes.conf[i].item()) if r.boxes.conf is not None else 0.0
+                cname = road_model.names.get(cls_id, str(cls_id))
+                detected_labels.append(cname)
+                if cname in ACCIDENT_CLASSES and conf >= ROAD_CONF_THRES:
+                    if conf > best_road_conf:
+                        best_road_conf = conf
+                        best_road_label = cname
 
-        if accident_detected:
-            road_hits += 1
-        else:
-            road_hits = 0
+        # Fast-path: Unequivocal high-confidence road collision or pedestrian incident (>= 0.75)
+        if best_road_conf >= 0.75:
+            save_snapshot(img)
+            return jsonify({
+                "accident": True,
+                "emergency": True,
+                "type": "road_vehicle_accident",
+                "score": float(best_road_conf),
+                "confidence": float(best_road_conf),
+                "result": "road accident detected",
+                "labels": detected_labels
+            })
 
-        if road_hits >= ROAD_CONFIRM_HITS:
-            road_hits = medium_hits = fall_hits = 0
-            return jsonify({"accident": True, "type": "road_vehicle_accident", "score": float(best_conf), "result": "road accident detected", "labels": detected_labels})
-
-        # FALL
-        fall_results  = fall_model(img, conf=FALL_CONF_THRES, verbose=False)
-        fall_detected = False
-        fall_conf     = 0.0
-
+        # 3. RUN FALL MODEL IF NO HIGH-CONFIDENCE ROAD COLLISION
+        fall_results = fall_model(img, conf=0.30, verbose=False)
+        best_fall_conf = 0.0
         for r in fall_results:
-            if r.boxes is None or len(r.boxes) == 0: continue
+            if r.boxes is None or len(r.boxes) == 0:
+                continue
             for i in range(len(r.boxes)):
-                conf         = float(r.boxes.conf[i].item()) if r.boxes.conf is not None else 0.0
-                x1,y1,x2,y2 = r.boxes.xyxy[i].cpu().numpy()
-                box_area     = max(0, (x2-x1)) * max(0, (y2-y1))
-                area_ratio   = box_area / frame_area
+                conf = float(r.boxes.conf[i].item()) if r.boxes.conf is not None else 0.0
+                x1, y1, x2, y2 = r.boxes.xyxy[i].cpu().numpy()
+                box_area = max(0, (x2 - x1)) * max(0, (y2 - y1))
+                area_ratio = box_area / frame_area
                 if conf >= FALL_CONF_THRES and area_ratio >= FALL_MIN_AREA_RATIO:
-                    fall_detected = True
-                    if conf > fall_conf:
-                        fall_conf = conf
+                    if conf > best_fall_conf:
+                        best_fall_conf = conf
+                        if "Fall-Detected" not in detected_labels:
+                            detected_labels.append("Fall-Detected")
 
-        if fall_detected:
-            fall_hits += 1
-        else:
-            fall_hits = 0
+        # 3. SYNTHESIZE MULTI-MODAL ACCIDENT OUTCOME
+        # Case A: Pedestrian road incident detected
+        if best_road_label == "human_incident" and best_road_conf >= ROAD_CONF_THRES:
+            save_snapshot(img)
+            return jsonify({
+                "accident": True,
+                "emergency": True,
+                "type": "road_vehicle_accident",
+                "score": float(best_road_conf),
+                "confidence": float(best_road_conf),
+                "result": "road accident detected",
+                "labels": detected_labels
+            })
 
-        if fall_hits >= FALL_CONFIRM_HITS:
-            fall_hits = road_hits = medium_hits = 0
-            return jsonify({"accident": True, "type": "human_fall_accident", "score": float(fall_conf), "result": "fall detected"})
+        # Case B: Fall is detected with higher confidence than vehicle incident
+        if best_fall_conf >= FALL_CONF_THRES and best_fall_conf >= best_road_conf:
+            save_snapshot(img)
+            return jsonify({
+                "accident": True,
+                "emergency": True,
+                "type": "human_fall_accident",
+                "score": float(best_fall_conf),
+                "confidence": float(best_fall_conf),
+                "result": "fall detected",
+                "labels": detected_labels
+            })
 
-        return jsonify({"accident": False, "type": "non_accident", "score": 0.0, "result": "normal", "labels": detected_labels})
+        # Case C: Vehicle crash detected
+        if best_road_conf >= ROAD_CONF_THRES:
+            save_snapshot(img)
+            return jsonify({
+                "accident": True,
+                "emergency": True,
+                "type": "road_vehicle_accident",
+                "score": float(best_road_conf),
+                "confidence": float(best_road_conf),
+                "result": "road accident detected",
+                "labels": detected_labels
+            })
+
+        # Case D: Fall detected without road incident
+        if best_fall_conf >= FALL_CONF_THRES:
+            save_snapshot(img)
+            return jsonify({
+                "accident": True,
+                "emergency": True,
+                "type": "human_fall_accident",
+                "score": float(best_fall_conf),
+                "confidence": float(best_fall_conf),
+                "result": "fall detected",
+                "labels": detected_labels
+            })
+
+        # Case E: Normal Scene (Non-Accident)
+        return jsonify({
+            "accident": False,
+            "emergency": False,
+            "type": "non_accident",
+            "score": 0.0,
+            "confidence": 0.0,
+            "result": "normal",
+            "labels": detected_labels
+        })
 
     except Exception as e:
-        return jsonify({"accident": False, "type": "non_accident", "score": 0.0, "result": "normal", "error": str(e)}), 500
+        return jsonify({
+            "accident": False,
+            "emergency": False,
+            "type": "non_accident",
+            "score": 0.0,
+            "confidence": 0.0,
+            "result": "normal",
+            "error": str(e)
+        }), 500
 
 # =====================================================
 # SEND EMAIL — ESP32-CAM theke (30 sec por call kore)
