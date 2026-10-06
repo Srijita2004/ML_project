@@ -35,7 +35,7 @@ def run_tests():
     # ----------------------------------------------------
     # TEST 3: Positive Fall Emergency Detection
     # ----------------------------------------------------
-    fall_sample = Path(r"D:\Fall_Expanded\test\images\CAUCA_cas1000079_png.rf.f58cc9429af6c1beff0b49cfc60b74b9.jpg")
+    fall_sample = Path(__file__).resolve().parent / "test_images" / "images (1).jpg"
     print(f"\n[TEST 3] POST /predict with FALL image: {fall_sample.name}")
     assert fall_sample.exists(), f"Sample image not found: {fall_sample}"
 
@@ -61,7 +61,7 @@ def run_tests():
     # ----------------------------------------------------
     # TEST 4: Negative Non-Fall Normal Activity
     # ----------------------------------------------------
-    nofall_sample = Path(r"D:\Fall_Expanded\test\images\CAUCA_ars1000001_png.rf.5695d8e8198ebe5948d64ed46e5a0219.jpg")
+    nofall_sample = Path(__file__).resolve().parent / "test_images" / "images (4).jpg"
     print(f"\n[TEST 4] POST /predict with NORMAL image: {nofall_sample.name}")
     assert nofall_sample.exists(), f"Sample image not found: {nofall_sample}"
 

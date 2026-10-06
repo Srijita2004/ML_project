@@ -2,7 +2,8 @@ import time
 import json
 from pathlib import Path
 import sys
-sys.path.insert(0, r"D:\accident\accident")
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from app_final import app
 
@@ -38,7 +39,7 @@ def run_tests():
     # ----------------------------------------------------
     # TEST 3: Positive Fire Incident 1 (fire_basket.jpg)
     # ----------------------------------------------------
-    fire_sample_1 = Path(r"D:\accident\accident\test_images\fire_samples\fire_basket.jpg")
+    fire_sample_1 = Path(__file__).resolve().parent / "test_images" / "fire_samples" / "fire_basket.jpg"
     print(f"[TEST 3] POST /predict with REAL FIRE image: {fire_sample_1.name}")
     assert fire_sample_1.exists(), f"Sample image not found: {fire_sample_1}"
 
@@ -61,7 +62,7 @@ def run_tests():
     # ----------------------------------------------------
     # TEST 4: Positive Fire Incident 2 (pan_fire.jpg)
     # ----------------------------------------------------
-    fire_sample_2 = Path(r"D:\accident\accident\test_images\fire_samples\pan_fire.jpg")
+    fire_sample_2 = Path(__file__).resolve().parent / "test_images" / "fire_samples" / "pan_fire.jpg"
     print(f"[TEST 4] POST /predict with SECOND REAL FIRE image: {fire_sample_2.name}")
     assert fire_sample_2.exists(), f"Sample image not found: {fire_sample_2}"
 
@@ -84,7 +85,7 @@ def run_tests():
     # ----------------------------------------------------
     # TEST 5: Negative Challenge (Sunset Sky: images (3).jpg)
     # ----------------------------------------------------
-    sunset_sample = Path(r"D:\accident\accident\test_images\images (3).jpg")
+    sunset_sample = Path(__file__).resolve().parent / "test_images" / "images (3).jpg"
     print(f"[TEST 5] POST /predict with SUNSET SKY image: {sunset_sample.name}")
     assert sunset_sample.exists(), f"Sample image not found: {sunset_sample}"
 
@@ -106,7 +107,7 @@ def run_tests():
     # ----------------------------------------------------
     # TEST 6: Negative Challenge (Red Vehicle: _91193810_pune.jpg)
     # ----------------------------------------------------
-    red_car_sample = Path(r"D:\accident\accident\test_images\_91193810_pune.jpg")
+    red_car_sample = Path(__file__).resolve().parent / "test_images" / "_91193810_pune.jpg"
     print(f"[TEST 6] POST /predict with RED VEHICLE ACCIDENT image: {red_car_sample.name}")
     assert red_car_sample.exists(), f"Sample image not found: {red_car_sample}"
 
@@ -130,7 +131,7 @@ def run_tests():
     # ----------------------------------------------------
     # TEST 7: Negative Challenge (Red Bus: images (6).jpg)
     # ----------------------------------------------------
-    red_bus_sample = Path(r"D:\accident\accident\test_images\images (6).jpg")
+    red_bus_sample = Path(__file__).resolve().parent / "test_images" / "images (6).jpg"
     print(f"[TEST 7] POST /predict with RED BUS image: {red_bus_sample.name}")
     assert red_bus_sample.exists(), f"Sample image not found: {red_bus_sample}"
 

@@ -1,4 +1,15 @@
+---
+title: Emergency Detection ML Service
+emoji: 🚨
+colorFrom: red
+colorTo: blue
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # Universal Golden Minute Emergency Response System (ML Component)
+
 
 An automated multi-hazard AI emergency detection and life-saving dispatch platform designed for the critical "Golden Minute" window in trauma and accident response.
 

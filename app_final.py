@@ -29,20 +29,22 @@ EMAIL_COOLDOWN         = 35
 # =====================================================
 # MODELS
 # =====================================================
-fall_model_path = "fall_expanded_best.pt" if os.path.exists("fall_expanded_best.pt") else "fall_accident_model_best.pt"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+fall_model_path = os.path.join(BASE_DIR, "fall_expanded_best.pt") if os.path.exists(os.path.join(BASE_DIR, "fall_expanded_best.pt")) else os.path.join(BASE_DIR, "fall_accident_model_best.pt")
 print(f"[MODEL] Loading fall model: {fall_model_path}")
 fall_model = YOLO(fall_model_path)
 
-road_model_path = "road_expanded_best.pt" if os.path.exists("road_expanded_best.pt") else "road_best.pt"
+road_model_path = os.path.join(BASE_DIR, "road_expanded_best.pt") if os.path.exists(os.path.join(BASE_DIR, "road_expanded_best.pt")) else os.path.join(BASE_DIR, "road_best.pt")
 print(f"[MODEL] Loading road model: {road_model_path}")
 road_model = YOLO(road_model_path)
 
 # =====================================================
-# EMAIL
+# EMAIL CONFIGURATION (Supports ENV overrides)
 # =====================================================
-EMAIL_ADDRESS = "projectg595@gmail.com"
-APP_PASSWORD  = "dqnuhcmfhxkeprxz"
-TO_EMAIL      = "projectg595@gmail.com"
+EMAIL_ADDRESS = os.environ.get("ALERT_EMAIL_ADDRESS", "projectg595@gmail.com")
+APP_PASSWORD  = os.environ.get("ALERT_APP_PASSWORD", "dqnuhcmfhxkeprxz")
+TO_EMAIL      = os.environ.get("ALERT_TO_EMAIL", "projectg595@gmail.com")
 
 # =====================================================
 # FIRE SETTINGS
@@ -238,6 +240,16 @@ def is_fire_like(frame_bgr):
     return fire_ratio, strong_hit, medium_hit
 
 # =====================================================
+# CORS SUPPORT
+# =====================================================
+@app.after_request
+def add_cors_headers(response):
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With"
+    return response
+
+# =====================================================
 # HOME
 # =====================================================
 @app.route("/", methods=["GET"])
@@ -272,9 +284,12 @@ def gps_status():
 # =====================================================
 # PREDICT
 # =====================================================
-@app.route("/predict", methods=["POST"])
+@app.route("/predict", methods=["POST", "OPTIONS"])
 def predict():
     global medium_hits, road_hits, fall_hits
+
+    if request.method == "OPTIONS":
+        return jsonify({"status": "ok"}), 200
 
     try:
         file = request.data
@@ -423,4 +438,6 @@ def pulse_alert():
 # MAIN
 # =====================================================
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    host = os.environ.get("HOST", "0.0.0.0")
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host=host, port=port)

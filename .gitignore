@@ -7,6 +7,7 @@ __pycache__/
 last_accident.jpg
 scratch_mask2.jpg
 *.tmp
+.env
 
 # Gigabyte-scale zip archives and raw image datasets (exceeds GitHub 100MB file limit)
 *.zip

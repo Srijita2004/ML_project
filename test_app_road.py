@@ -5,7 +5,8 @@ from ultralytics import YOLO
 
 # Import app from app_final
 import sys
-sys.path.insert(0, r"D:\accident\accident")
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import app_final
 from app_final import app
@@ -47,7 +48,7 @@ def run_tests():
     # ----------------------------------------------------
     # TEST 3: Positive Vehicle Accident Detection
     # ----------------------------------------------------
-    car_crash_sample = Path(r"D:\accident\accident\test_images\skynews-car-crash-goodmayes_7250187.jpg")
+    car_crash_sample = Path(__file__).resolve().parent / "test_images" / "skynews-car-crash-goodmayes_7250187.jpg"
     print(f"[TEST 3] POST /predict with CAR CRASH image: {car_crash_sample.name}")
     assert car_crash_sample.exists(), f"Sample image not found: {car_crash_sample}"
 
@@ -71,7 +72,7 @@ def run_tests():
     # ----------------------------------------------------
     # TEST 4: Positive Pedestrian Accident Detection
     # ----------------------------------------------------
-    ped_sample = Path(r"D:\accident\accident\test_images\Pedestrian-accident-3.jpg")
+    ped_sample = Path(__file__).resolve().parent / "test_images" / "Pedestrian-accident-3.jpg"
     print(f"[TEST 4] POST /predict with PEDESTRIAN ACCIDENT image: {ped_sample.name}")
     assert ped_sample.exists(), f"Sample image not found: {ped_sample}"
 
@@ -95,7 +96,7 @@ def run_tests():
     # ----------------------------------------------------
     # TEST 5: Negative Normal Traffic Scene (No False Alarm)
     # ----------------------------------------------------
-    normal_sample = Path(r"D:\accident\accident\test_images\images (4).jpg")
+    normal_sample = Path(__file__).resolve().parent / "test_images" / "images (4).jpg"
     print(f"[TEST 5] POST /predict with NORMAL TRAFFIC image: {normal_sample.name}")
     assert normal_sample.exists(), f"Sample image not found: {normal_sample}"
 
@@ -117,7 +118,7 @@ def run_tests():
     # ----------------------------------------------------
     # TEST 6: Second Normal Traffic Scene
     # ----------------------------------------------------
-    normal_sample_2 = Path(r"D:\accident\accident\test_images\images.jpg")
+    normal_sample_2 = Path(__file__).resolve().parent / "test_images" / "images.jpg"
     print(f"[TEST 6] POST /predict with SECOND NORMAL TRAFFIC image: {normal_sample_2.name}")
     assert normal_sample_2.exists(), f"Sample image not found: {normal_sample_2}"
 
