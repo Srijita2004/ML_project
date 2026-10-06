@@ -18,6 +18,7 @@ runs/
 yolov8s.pt
 prompt10*.txt
 deploy_to_hf.py
+models/production/road_best.pt
 
 # IDE & Editor files
 .vscode/

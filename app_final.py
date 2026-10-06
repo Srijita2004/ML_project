@@ -57,16 +57,17 @@ fall_model_path = next((p for p in fall_model_candidates if os.path.exists(p)), 
 print(f"[MODEL] Loading fall model: {fall_model_path}")
 fall_model = YOLO(fall_model_path)
 
-# 3. Road Model (YOLOv8s trained on CCTV collisions & normal traffic)
+# 3. Road Model (YOLOv8s trained on collisions & normal traffic)
 road_model_candidates = [
+    os.path.join(BASE_DIR, "models", "production", "road_best.pt"),
+    os.path.join(BASE_DIR, "road_best.pt"),
     os.path.join(BASE_DIR, "models", "production", "road_v3_small_best.pt"),
     os.path.join(BASE_DIR, "road_v3_small_best.pt"),
     os.path.join(BASE_DIR, "models", "production", "road_v2_cctv_best.pt"),
     os.path.join(BASE_DIR, "road_expanded_best.pt"),
-    os.path.join(BASE_DIR, "road_best.pt"),
-    os.path.join(BASE_DIR, "models", "rollback", "road_expanded_best_v1.pt"),
+    os.path.join(BASE_DIR, "models", "rollback", "road_best_baseline.pt"),
 ]
-road_model_path = next((p for p in road_model_candidates if os.path.exists(p)), os.path.join(BASE_DIR, "road_v3_small_best.pt"))
+road_model_path = next((p for p in road_model_candidates if os.path.exists(p)), os.path.join(BASE_DIR, "road_best.pt"))
 print(f"[MODEL] Loading road model: {road_model_path}")
 road_model = YOLO(road_model_path)
 
@@ -379,6 +380,7 @@ def predict():
         # =====================================================
         best_road_conf = 0.0
         best_road_label = None
+        has_vehicle = False
 
         try:
             road_results = road_model(img, conf=0.25, verbose=False)
@@ -391,6 +393,8 @@ def predict():
                     cname = road_model.names.get(cls_id, str(cls_id))
                     if cname not in detected_labels:
                         detected_labels.append(cname)
+                    if "vehicle" in cname:
+                        has_vehicle = True
                     if cname in ACCIDENT_CLASSES:
                         if conf > best_road_conf:
                             best_road_conf = conf
@@ -420,6 +424,13 @@ def predict():
                                 detected_labels.append("Fall-Detected")
         except Exception as e:
             print(f"[FALL INFERENCE ERROR]: {e}")
+
+        # Gated arbitration: If human_incident was seen but scene has no vehicles,
+        # and fall detector fired or detected a fallen person, route to human_fall_accident
+        if best_road_label == "human_incident" and not has_vehicle:
+            if best_fall_conf >= FALL_CONF_THRES or best_fall_conf > 0.30:
+                best_fall_conf = max(best_fall_conf, best_road_conf)
+                best_road_conf = 0.0
 
         # =====================================================
         # 4. STRUCTURED HAZARD SCORES (NO CROSS-HAZARD AVERAGING)
