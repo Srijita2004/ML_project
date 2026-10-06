@@ -293,6 +293,11 @@ def predict():
 
     try:
         file = request.data
+        if (not file or len(file) == 0) and request.files:
+            file_obj = request.files.get("file") or request.files.get("image")
+            if file_obj:
+                file = file_obj.read()
+
         if not file:
             return jsonify({"accident": False, "type": "non_accident", "score": 0.0, "result": "normal", "error": "empty_body"}), 400
 
@@ -300,6 +305,7 @@ def predict():
         img   = cv2.imdecode(npimg, cv2.IMREAD_COLOR)
         if img is None:
             return jsonify({"accident": False, "type": "non_accident", "score": 0.0, "result": "normal", "error": "bad_image"}), 400
+
 
         cv2.imwrite("last_accident.jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 40])
 
